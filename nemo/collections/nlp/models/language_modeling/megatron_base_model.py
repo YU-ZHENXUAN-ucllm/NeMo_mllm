@@ -402,39 +402,42 @@ class MegatronBaseModel(NLPModel):
 
         def is_official_release_version(nvidia_torch_version):
             return re.fullmatch(r"[0-9][0-9]\.[0-9][0-9].*", nvidia_torch_version)  # "YY.MM.*"
-
-        # Support DLFW dev container
-        if not is_official_release_version(nvidia_torch_version):
-            nvidia_torch_version = datetime.now().strftime('%y.%m')
-
         if nvidia_torch_version is not None:
-            try:
-                NVIDIA_TORCH_MAJOR = int(nvidia_torch_version.split('.')[0])
-            except Exception:
-                NVIDIA_TORCH_MAJOR = 0
-            try:
-                NVIDIA_TORCH_MINOR = int(nvidia_torch_version.split('.')[1][:2])
-            except Exception:
-                NVIDIA_TORCH_MINOR = 0
+            # Support DLFW dev container
+            if not is_official_release_version(nvidia_torch_version):
+                nvidia_torch_version = datetime.now().strftime('%y.%m')
 
-            # Apex Persistent layer norm is supported from Nvidia PyTorch container v21.11
-            # This only depends on Apex version?
-            if NVIDIA_TORCH_MAJOR < 21 or (NVIDIA_TORCH_MAJOR == 21 and NVIDIA_TORCH_MINOR < 11):
-                self.cfg.persist_layer_norm = False
+            if nvidia_torch_version is not None:
+                try:
+                    NVIDIA_TORCH_MAJOR = int(nvidia_torch_version.split('.')[0])
+                except Exception:
+                    NVIDIA_TORCH_MAJOR = 0
+                try:
+                    NVIDIA_TORCH_MINOR = int(nvidia_torch_version.split('.')[1][:2])
+                except Exception:
+                    NVIDIA_TORCH_MINOR = 0
 
-            # NVFUSER available starting with 21.11
-            if (NVIDIA_TORCH_MAJOR >= 21 or (NVIDIA_TORCH_MAJOR == 21 and NVIDIA_TORCH_MINOR >= 11)) and (
-                NVIDIA_TORCH_MAJOR < 23 or (NVIDIA_TORCH_MAJOR == 23 and NVIDIA_TORCH_MINOR < 11)
-            ):
+                # Apex Persistent layer norm is supported from Nvidia PyTorch container v21.11
+                # This only depends on Apex version?
+                if NVIDIA_TORCH_MAJOR < 21 or (NVIDIA_TORCH_MAJOR == 21 and NVIDIA_TORCH_MINOR < 11):
+                    self.cfg.persist_layer_norm = False
 
-                # NVFUSER
-                torch._C._jit_set_profiling_executor(True)
-                torch._C._jit_set_profiling_mode(True)
-                torch._C._jit_override_can_fuse_on_cpu(False)
-                torch._C._jit_override_can_fuse_on_gpu(False)
-                torch._C._jit_set_texpr_fuser_enabled(False)
-                torch._C._jit_set_nvfuser_enabled(True)
-                torch._C._debug_set_autodiff_subgraph_inlining(False)
+                # NVFUSER available starting with 21.11
+                if (NVIDIA_TORCH_MAJOR >= 21 or (NVIDIA_TORCH_MAJOR == 21 and NVIDIA_TORCH_MINOR >= 11)) and (
+                    NVIDIA_TORCH_MAJOR < 23 or (NVIDIA_TORCH_MAJOR == 23 and NVIDIA_TORCH_MINOR < 11)
+                ):
+
+                    # NVFUSER
+                    torch._C._jit_set_profiling_executor(True)
+                    torch._C._jit_set_profiling_mode(True)
+                    torch._C._jit_override_can_fuse_on_cpu(False)
+                    torch._C._jit_override_can_fuse_on_gpu(False)
+                    torch._C._jit_set_texpr_fuser_enabled(False)
+                    torch._C._jit_set_nvfuser_enabled(True)
+                    torch._C._debug_set_autodiff_subgraph_inlining(False)
+            else:
+                # Not a Nvidia container. NVFUSER Dependency check is on users
+                pass
         else:
             # Not a Nvidia container. NVFUSER Dependency check is on users
             pass
