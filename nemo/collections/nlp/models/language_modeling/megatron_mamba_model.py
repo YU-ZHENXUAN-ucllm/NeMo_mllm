@@ -1,4 +1,4 @@
-# Copyright (c) 2025, NVIDIA CORPORATION.  All rights reserved.
+# Copyright (c) 2024, NVIDIA CORPORATION.  All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,8 +13,9 @@
 # limitations under the License.
 
 import torch
-from lightning.pytorch.trainer.trainer import Trainer
+import torch.nn.functional as F
 from omegaconf.dictconfig import DictConfig
+from pytorch_lightning.trainer.trainer import Trainer
 
 from nemo.collections.nlp.models.language_modeling.megatron_gpt_model import MegatronGPTModel
 from nemo.utils import logging
@@ -38,6 +39,8 @@ except (ImportError, ModuleNotFoundError):
 
     HAVE_MEGATRON_CORE = False
 
+def squared_relu(x):
+    return torch.pow(F.relu(x), 2)
 
 class MegatronMambaModel(MegatronGPTModel):
     """
@@ -62,15 +65,28 @@ class MegatronMambaModel(MegatronGPTModel):
         self.transformer_config.add_bias_linear = self.cfg.get('add_bias_linear', False)
         self.transformer_config.gated_linear_unit = self.cfg.get('gated_linear_unit', False)
         self.transformer_config.layernorm_epsilon = self.cfg.get('layernorm_epsilon', 1e-5)
+        if self.cfg.get('params_dtype'):
+            self.transformer_config.params_dtype = torch.bfloat16
+        else:
+            self.transformer_config.params_dtype = torch.float32
+        self.transformer_config.params_dtype=torch.bfloat16
+        if self.cfg.get('kv_channels'):
+            self.transformer_config.kv_channels = self.cfg.get('kv_channels')
+        if self.cfg.get('squared_relu_activation'):
+            self.transformer_config.activation_func = squared_relu
 
         model = MambaModel(
             config=self.transformer_config,
             max_sequence_length=self.cfg.get('encoder_seq_length', 4096),
             vocab_size=self.cfg.get('vocab_size', 65536),
-            mamba_ssm_ngroups=self.cfg.get('mamba_ssm_ngroups', 8),
             mamba_stack_spec=mamba_stack_spec,
             hybrid_override_pattern=self.hybrid_override_pattern,
         )
+        self.transformer_config.mamba_num_groups = self.cfg.get('mamba_num_groups', 8)
+
+        self.transformer_config.num_attention_heads = self.cfg.get('num_attention_heads', 24)
+        self.transformer_config.kv_channels = self.cfg.get('kv_channels', 64)
+        self.transformer_config.num_query_groups = self.cfg.get('num_query_groups', 6)
 
         return model
 
